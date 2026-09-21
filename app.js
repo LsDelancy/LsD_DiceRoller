@@ -1033,9 +1033,109 @@ function renderPanels() {
         `;
 
         container.appendChild(panel);
+        displayRememberedRoll(panelNumber);
     }
 
     addPanelButtonEvents();
+}
+
+
+// =========================================================
+// PANEL ROLL MEMORY
+// =========================================================
+
+function displayRememberedRoll(panelNumber) {
+    const config = panels[panelNumber];
+    const memory = config.lastRoll;
+
+    const resultElement =
+        document.getElementById(
+            `result-${panelNumber}`
+        );
+
+    const calculationElement =
+        document.getElementById(
+            `calculation-${panelNumber}`
+        );
+
+    const rollsElement =
+        document.getElementById(
+            `rolls-${panelNumber}`
+        );
+
+    if (!memory) {
+        resultElement.textContent = "—";
+        calculationElement.textContent = "";
+        rollsElement.innerHTML = "";
+        return;
+    }
+
+    resultElement.textContent =
+        memory.total;
+
+    if (config.modifierType === "none") {
+        calculationElement.textContent = "";
+    } else {
+        const sign =
+            config.modifierType === "plus"
+                ? "+"
+                : "−";
+
+        calculationElement.textContent =
+            `(${memory.diceResult} ${sign} ${config.modifierValue})`;
+    }
+
+    rollsElement.innerHTML = "";
+
+    if (
+        config.sides === 20 &&
+        Array.isArray(memory.rolls)
+    ) {
+        const label =
+            document.createElement("span");
+
+        label.className =
+            "rolls-label";
+
+        label.textContent =
+            config.dice === 1
+                ? "Die: "
+                : "Dice: ";
+
+        rollsElement.appendChild(label);
+
+        memory.rolls.forEach((roll, index) => {
+            const span =
+                document.createElement("span");
+
+            span.textContent = roll;
+
+            if (roll === 20) {
+                span.classList.add(
+                    "natural-20"
+                );
+            }
+
+            if (roll === 1) {
+                span.classList.add(
+                    "natural-1"
+                );
+            }
+
+            rollsElement.appendChild(span);
+
+            if (
+                index <
+                memory.rolls.length - 1
+            ) {
+                rollsElement.appendChild(
+                    document.createTextNode(
+                        ", "
+                    )
+                );
+            }
+        });
+    }
 }
 
 
@@ -1070,95 +1170,23 @@ function rollPanel(panelNumber) {
         diceResult = Math.min(...rolls);
     }
 
-    const signedModifier = getSignedModifier(config);
+    const signedModifier =
+        getSignedModifier(config);
 
     const finalTotal =
         diceResult + signedModifier;
 
-    const resultElement =
-        document.getElementById(
-            `result-${panelNumber}`
-        );
+    config.lastRoll = {
+        total: finalTotal,
+        diceResult: diceResult,
+        rolls: rolls
+    };
 
-    const calculationElement =
-        document.getElementById(
-            `calculation-${panelNumber}`
-        );
+    displayRememberedRoll(panelNumber);
 
-    const rollsElement =
-        document.getElementById(
-            `rolls-${panelNumber}`
-        );
-
-
-    resultElement.textContent =
-        finalTotal;
-
-
-    if (config.modifierType === "none") {
-        calculationElement.textContent = "";
-    } else {
-        const sign =
-            config.modifierType === "plus"
-                ? "+"
-                : "−";
-
-        calculationElement.textContent =
-            `(${diceResult} ${sign} ${config.modifierValue})`;
-    }
-
-
-    rollsElement.innerHTML = "";
-
-
-    if (config.sides === 20) {
-        const label =
-            document.createElement("span");
-
-        label.className =
-            "rolls-label";
-
-        label.textContent =
-            config.dice === 1
-                ? "Die: "
-                : "Dice: ";
-
-        rollsElement.appendChild(label);
-
-
-        rolls.forEach((roll, index) => {
-            const span =
-                document.createElement("span");
-
-            span.textContent =
-                roll;
-
-            if (roll === 20) {
-                span.classList.add(
-                    "natural-20"
-                );
-            }
-
-            if (roll === 1) {
-                span.classList.add(
-                    "natural-1"
-                );
-            }
-
-            rollsElement.appendChild(span);
-
-            if (
-                index <
-                rolls.length - 1
-            ) {
-                rollsElement.appendChild(
-                    document.createTextNode(
-                        ", "
-                    )
-                );
-            }
-        });
-    }
+    // Local save happens immediately inside savePanelsToCloud().
+    // If online, the same roll memory is then synced to Supabase.
+    void savePanelsToCloud();
 }
 
 
