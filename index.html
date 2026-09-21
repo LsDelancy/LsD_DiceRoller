@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  >
+
+  <title>Dice Roller</title>
+
+  <meta name="theme-color" content="#0a0f15">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dice Roller">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <main class="app">
+
+    <!-- MAIN ROLLER SCREEN -->
+    <section id="roller-screen">
+      <h1>Dice Roller</h1>
+      <div id="panels-container"></div>
+    </section>
+
+    <!-- CONFIGURATION SCREEN -->
+    <section id="config-screen" class="hidden">
+
+      <h2 id="config-title">Panel 1 Configuration</h2>
+
+      <div class="config-form">
+
+        <label for="config-dice">
+          Number of Dice
+        </label>
+
+        <input
+          id="config-dice"
+          type="number"
+          min="1"
+          max="99"
+          step="1"
+          inputmode="numeric"
+        >
+
+        <label for="config-sides">
+          Dice Sides
+        </label>
+
+        <select id="config-sides">
+          <option value="4">d4</option>
+          <option value="6">d6</option>
+          <option value="8">d8</option>
+          <option value="10">d10</option>
+          <option value="12">d12</option>
+          <option value="20">d20</option>
+          <option value="100">d100</option>
+        </select>
+
+        <label>
+          Modifier
+        </label>
+
+        <div class="modifier-type-buttons">
+          <button
+            type="button"
+            id="modifier-minus"
+            class="modifier-type-button"
+            data-modifier-type="minus"
+          >
+            −
+          </button>
+
+          <button
+            type="button"
+            id="modifier-none"
+            class="modifier-type-button"
+            data-modifier-type="none"
+          >
+            NONE
+          </button>
+
+          <button
+            type="button"
+            id="modifier-plus"
+            class="modifier-type-button"
+            data-modifier-type="plus"
+          >
+            +
+          </button>
+        </div>
+
+        <div id="modifier-value-group">
+          <label for="config-modifier">
+            Modifier Value
+          </label>
+
+          <input
+            id="config-modifier"
+            type="number"
+            min="1"
+            max="99"
+            step="1"
+            inputmode="numeric"
+          >
+        </div>
+
+        <div id="roll-mode-group">
+          <label for="config-mode">
+            Roll Mode
+          </label>
+
+          <select id="config-mode">
+            <option value="normal">Normal</option>
+            <option value="advantage">Advantage</option>
+            <option value="disadvantage">Disadvantage</option>
+          </select>
+        </div>
+
+        <div id="config-warning" class="config-warning"></div>
+
+        <button
+          type="button"
+          id="set-config-button"
+          class="set-button"
+        >
+          SET
+        </button>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js");
+      });
+    }
+  </script>
+
+</body>
+</html>
