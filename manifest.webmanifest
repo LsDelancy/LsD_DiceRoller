@@ -1,7 +1,7 @@
 {
   "name": "Dice Roller",
   "short_name": "Dice Roller",
-  "description": "A secure, mobile-first RPG dice roller.",
+  "description": "A secure, account-synced, mobile-first RPG dice roller.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

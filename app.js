@@ -36,6 +36,453 @@ function rollDie(sides) {
 
 
 // =========================================================
+// SUPABASE AUTHENTICATION / CLOUD SYNC
+// =========================================================
+
+const SUPABASE_URL = "https://owjypjpqpjwieaadmcij.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_YEIjvyEdP3_6UbKC_gX7eQ_mdb0IUFx";
+
+const AUTH_STORAGE_KEY = "diceRollerAuthSession";
+
+let authSession = null;
+let currentUser = null;
+
+
+function panelStorageKey() {
+    if (!currentUser || !currentUser.id) {
+        return "diceRollerPanels_guest";
+    }
+
+    return `diceRollerPanels_${currentUser.id}`;
+}
+
+
+function apiHeaders(accessToken = null) {
+    const headers = {
+        "apikey": SUPABASE_PUBLISHABLE_KEY,
+        "Content-Type": "application/json"
+    };
+
+    if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    return headers;
+}
+
+
+function saveAuthSession(session) {
+    authSession = session;
+
+    if (session) {
+        localStorage.setItem(
+            AUTH_STORAGE_KEY,
+            JSON.stringify(session)
+        );
+    } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+}
+
+
+function loadAuthSession() {
+    const saved = localStorage.getItem(AUTH_STORAGE_KEY);
+
+    if (!saved) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(saved);
+    } catch {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        return null;
+    }
+}
+
+
+function savePanelsLocally() {
+    localStorage.setItem(
+        panelStorageKey(),
+        JSON.stringify(panels)
+    );
+}
+
+
+function loadPanelsLocally() {
+    const saved = localStorage.getItem(panelStorageKey());
+
+    if (!saved) {
+        return false;
+    }
+
+    try {
+        const data = JSON.parse(saved);
+
+        if (
+            data &&
+            data["1"] &&
+            data["2"] &&
+            data["3"] &&
+            data["4"]
+        ) {
+            panels[1] = data["1"];
+            panels[2] = data["2"];
+            panels[3] = data["3"];
+            panels[4] = data["4"];
+            return true;
+        }
+    } catch (error) {
+        console.warn("Could not load local panel settings.", error);
+    }
+
+    return false;
+}
+
+
+function setSyncStatus(text, className = "") {
+    const element = document.getElementById("sync-status");
+
+    if (!element) {
+        return;
+    }
+
+    element.textContent = text;
+    element.className = "sync-status";
+
+    if (className) {
+        element.classList.add(className);
+    }
+}
+
+
+async function signInWithPassword(email, password) {
+    const response = await fetch(
+        `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+        {
+            method: "POST",
+            headers: apiHeaders(),
+            body: JSON.stringify({
+                email,
+                password
+            })
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.error_description ||
+            data.msg ||
+            data.message ||
+            "Sign in failed."
+        );
+    }
+
+    saveAuthSession(data);
+    currentUser = data.user;
+}
+
+
+async function refreshAuthSession() {
+    if (
+        !authSession ||
+        !authSession.refresh_token
+    ) {
+        return false;
+    }
+
+    try {
+        const response = await fetch(
+            `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+            {
+                method: "POST",
+                headers: apiHeaders(),
+                body: JSON.stringify({
+                    refresh_token: authSession.refresh_token
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return false;
+        }
+
+        saveAuthSession(data);
+        currentUser = data.user;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+
+async function verifyCurrentSession() {
+    if (
+        !authSession ||
+        !authSession.access_token
+    ) {
+        return false;
+    }
+
+    try {
+        let response = await fetch(
+            `${SUPABASE_URL}/auth/v1/user`,
+            {
+                headers: apiHeaders(authSession.access_token)
+            }
+        );
+
+        if (
+            response.status === 401 &&
+            await refreshAuthSession()
+        ) {
+            response = await fetch(
+                `${SUPABASE_URL}/auth/v1/user`,
+                {
+                    headers: apiHeaders(authSession.access_token)
+                }
+            );
+        }
+
+        if (!response.ok) {
+            return false;
+        }
+
+        currentUser = await response.json();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+
+async function signOut() {
+    if (
+        authSession &&
+        authSession.access_token
+    ) {
+        try {
+            await fetch(
+                `${SUPABASE_URL}/auth/v1/logout`,
+                {
+                    method: "POST",
+                    headers: apiHeaders(authSession.access_token)
+                }
+            );
+        } catch {
+            // Local sign-out still proceeds.
+        }
+    }
+
+    saveAuthSession(null);
+    currentUser = null;
+
+    document.getElementById("config-screen").classList.add("hidden");
+    document.getElementById("roller-screen").classList.add("hidden");
+    document.getElementById("login-screen").classList.remove("hidden");
+    document.getElementById("login-password").value = "";
+    setSyncStatus("");
+}
+
+
+function cloudPayload() {
+    return {
+        user_id: currentUser.id,
+        panel1: panels[1],
+        panel2: panels[2],
+        panel3: panels[3],
+        panel4: panels[4],
+        updated_at: new Date().toISOString()
+    };
+}
+
+
+async function loadPanelsFromCloud() {
+    if (!currentUser) {
+        return false;
+    }
+
+    const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_dice_settings?user_id=eq.${encodeURIComponent(currentUser.id)}&select=panel1,panel2,panel3,panel4`,
+        {
+            headers: {
+                ...apiHeaders(authSession.access_token),
+                "Accept": "application/json"
+            }
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Cloud load failed (${response.status}).`);
+    }
+
+    const rows = await response.json();
+
+    if (
+        Array.isArray(rows) &&
+        rows.length > 0
+    ) {
+        panels[1] = rows[0].panel1;
+        panels[2] = rows[0].panel2;
+        panels[3] = rows[0].panel3;
+        panels[4] = rows[0].panel4;
+
+        savePanelsLocally();
+        return true;
+    }
+
+    return false;
+}
+
+
+async function savePanelsToCloud() {
+    savePanelsLocally();
+
+    if (
+        !currentUser ||
+        !navigator.onLine
+    ) {
+        setSyncStatus("Saved on this device", "warning");
+        return;
+    }
+
+    setSyncStatus("Saving…");
+
+    const validSession = await verifyCurrentSession();
+
+    if (!validSession) {
+        setSyncStatus("Saved on this device", "warning");
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `${SUPABASE_URL}/rest/v1/user_dice_settings?on_conflict=user_id`,
+            {
+                method: "POST",
+                headers: {
+                    ...apiHeaders(authSession.access_token),
+                    "Prefer": "resolution=merge-duplicates,return=minimal"
+                },
+                body: JSON.stringify(cloudPayload())
+            }
+        );
+
+        if (!response.ok) {
+            const body = await response.text();
+
+            throw new Error(
+                `Cloud save failed (${response.status}): ${body}`
+            );
+        }
+
+        setSyncStatus("Saved", "saved");
+    } catch (error) {
+        console.warn(error);
+        setSyncStatus("Saved on this device", "warning");
+    }
+}
+
+
+async function enterAuthenticatedApp() {
+    document.getElementById("login-screen").classList.add("hidden");
+    document.getElementById("config-screen").classList.add("hidden");
+    document.getElementById("roller-screen").classList.remove("hidden");
+
+    loadPanelsLocally();
+    renderPanels();
+
+    if (!navigator.onLine) {
+        setSyncStatus("Offline • using saved panels", "warning");
+        return;
+    }
+
+    setSyncStatus("Loading saved panels…");
+
+    try {
+        const loaded = await loadPanelsFromCloud();
+
+        if (loaded) {
+            renderPanels();
+            setSyncStatus("Saved panels loaded", "saved");
+        } else {
+            await savePanelsToCloud();
+        }
+    } catch (error) {
+        console.warn(error);
+        setSyncStatus("Using saved panels on this device", "warning");
+    }
+}
+
+
+async function handleLogin() {
+    const email = document
+        .getElementById("login-email")
+        .value
+        .trim();
+
+    const password = document
+        .getElementById("login-password")
+        .value;
+
+    const message = document.getElementById("login-message");
+
+    if (!email || !password) {
+        message.textContent = "Enter your email and password.";
+        return;
+    }
+
+    message.textContent = "Signing in…";
+
+    try {
+        await signInWithPassword(email, password);
+        message.textContent = "";
+        document.getElementById("login-password").value = "";
+        await enterAuthenticatedApp();
+    } catch (error) {
+        message.textContent = error.message;
+    }
+}
+
+
+async function initializeAuthenticatedApp() {
+    document.getElementById("login-screen").classList.add("hidden");
+    document.getElementById("roller-screen").classList.add("hidden");
+    document.getElementById("config-screen").classList.add("hidden");
+
+    authSession = loadAuthSession();
+
+    if (authSession) {
+        currentUser = authSession.user || null;
+
+        if (!navigator.onLine) {
+            loadPanelsLocally();
+            renderPanels();
+            document.getElementById("roller-screen").classList.remove("hidden");
+            setSyncStatus("Offline • using saved panels", "warning");
+            return;
+        }
+
+        const valid = await verifyCurrentSession();
+
+        if (valid) {
+            await enterAuthenticatedApp();
+            return;
+        }
+
+        saveAuthSession(null);
+        currentUser = null;
+    }
+
+    document.getElementById("login-screen").classList.remove("hidden");
+}
+
+
+// =========================================================
 // PANEL DATA
 // =========================================================
 
@@ -833,7 +1280,7 @@ document
     )
     .addEventListener(
         "click",
-        () => {
+        async () => {
 
             const dice =
                 Number(
@@ -971,12 +1418,58 @@ document
 
 
             renderPanels();
+            await savePanelsToCloud();
         }
     );
+
+
+// =========================================================
+// LOGIN / LOGOUT EVENTS
+// =========================================================
+
+document
+    .getElementById("login-button")
+    .addEventListener("click", handleLogin);
+
+document
+    .getElementById("login-password")
+    .addEventListener(
+        "keydown",
+        event => {
+            if (event.key === "Enter") {
+                handleLogin();
+            }
+        }
+    );
+
+document
+    .getElementById("logout-button")
+    .addEventListener("click", signOut);
+
+window.addEventListener(
+    "online",
+    async () => {
+        if (currentUser) {
+            await savePanelsToCloud();
+        }
+    }
+);
+
+window.addEventListener(
+    "offline",
+    () => {
+        if (currentUser) {
+            setSyncStatus(
+                "Offline • changes save on this device",
+                "warning"
+            );
+        }
+    }
+);
 
 
 // =========================================================
 // START APP
 // =========================================================
 
-renderPanels();
+initializeAuthenticatedApp();

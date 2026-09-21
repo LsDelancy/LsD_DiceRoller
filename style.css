@@ -425,3 +425,131 @@ button:active {
     font-size: 16px;
   }
 }
+
+
+/* =========================================================
+   AUTHENTICATION / SYNC
+========================================================= */
+
+.app-header {
+  display: grid;
+  grid-template-columns: 82px 1fr 82px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.app-header h1 {
+  margin: 3px 0 6px;
+}
+
+.header-spacer {
+  width: 82px;
+}
+
+.logout-button {
+  min-height: 38px;
+  padding: 0 8px;
+  color: #d8dde2;
+  background: #2d3740;
+  border: 1px solid #55616b;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.sync-status {
+  min-height: 18px;
+  margin: -2px 0 5px;
+  text-align: center;
+  color: #9da8b2;
+  font-size: 12px;
+}
+
+.sync-status.saved {
+  color: #61ce82;
+}
+
+.sync-status.warning {
+  color: #e4a656;
+}
+
+.login-card {
+  margin: 34px auto 0;
+  padding: 20px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.03), rgba(255,255,255,.005)),
+    #18212a;
+  border: 1px solid #46515d;
+  border-radius: 18px;
+  box-shadow:
+    0 7px 18px rgba(0,0,0,.25),
+    inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.login-card h2 {
+  margin: 0 0 18px;
+  text-align: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  color: #f2ede2;
+}
+
+.login-card label {
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 7px;
+  color: #dbe0e5;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.login-card input {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid #5d6975;
+  border-radius: 10px;
+  outline: none;
+  background: #0f161e;
+  color: white;
+  font-size: 18px;
+}
+
+.login-card input:focus {
+  border-color: #42b86b;
+  box-shadow: 0 0 0 2px rgba(66,184,107,.18);
+}
+
+.login-button {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 18px;
+  color: white;
+  background: linear-gradient(#49bf72, #287845);
+  border: 1px solid #67d58a;
+  font-size: 16px;
+}
+
+.login-message {
+  min-height: 20px;
+  margin-top: 10px;
+  color: #ff7b73;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+@media (max-width: 390px) {
+  .app-header {
+    grid-template-columns: 70px 1fr 70px;
+  }
+
+  .header-spacer {
+    width: 70px;
+  }
+
+  .logout-button {
+    min-height: 36px;
+    font-size: 9px;
+    padding: 0 5px;
+  }
+}

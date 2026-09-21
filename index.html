@@ -24,9 +24,58 @@
 
   <main class="app">
 
-    <!-- MAIN ROLLER SCREEN -->
-    <section id="roller-screen">
+    <!-- LOGIN SCREEN -->
+    <section id="login-screen" class="hidden">
       <h1>Dice Roller</h1>
+
+      <div class="login-card">
+        <h2>Sign In</h2>
+
+        <label for="login-email">Email</label>
+        <input
+          id="login-email"
+          type="email"
+          autocomplete="username"
+          inputmode="email"
+        >
+
+        <label for="login-password">Password</label>
+        <input
+          id="login-password"
+          type="password"
+          autocomplete="current-password"
+        >
+
+        <div id="login-message" class="login-message"></div>
+
+        <button
+          type="button"
+          id="login-button"
+          class="login-button"
+        >
+          SIGN IN
+        </button>
+      </div>
+    </section>
+
+    <!-- MAIN ROLLER SCREEN -->
+    <section id="roller-screen" class="hidden">
+      <div class="app-header">
+        <div class="header-spacer"></div>
+
+        <h1>Dice Roller</h1>
+
+        <button
+          type="button"
+          id="logout-button"
+          class="logout-button"
+        >
+          SIGN OUT
+        </button>
+      </div>
+
+      <div id="sync-status" class="sync-status"></div>
+
       <div id="panels-container"></div>
     </section>
 
