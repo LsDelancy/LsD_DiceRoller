@@ -453,6 +453,24 @@ async function initializeAuthenticatedApp() {
     document.getElementById("login-screen").classList.add("hidden");
     document.getElementById("roller-screen").classList.add("hidden");
     document.getElementById("config-screen").classList.add("hidden");
+    document.getElementById("setup-screen").classList.add("hidden");
+
+    const hashSession = readAuthHash();
+
+    if (
+        hashSession &&
+        (
+            hashSession.type === "invite" ||
+            hashSession.type === "recovery" ||
+            hashSession.type === "signup"
+        )
+    ) {
+        const started = await beginInviteSetup(hashSession);
+
+        if (started) {
+            return;
+        }
+    }
 
     authSession = loadAuthSession();
 
@@ -479,6 +497,158 @@ async function initializeAuthenticatedApp() {
     }
 
     document.getElementById("login-screen").classList.remove("hidden");
+}
+
+
+
+// =========================================================
+// INVITATION / PASSWORD SETUP
+// =========================================================
+
+function readAuthHash() {
+    const hash = window.location.hash;
+
+    if (!hash || hash.length < 2) {
+        return null;
+    }
+
+    const params = new URLSearchParams(hash.slice(1));
+
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    const type = params.get("type");
+
+    if (!accessToken) {
+        return null;
+    }
+
+    return {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        type: type
+    };
+}
+
+
+function clearAuthHash() {
+    if (window.location.hash) {
+        history.replaceState(
+            null,
+            document.title,
+            window.location.pathname + window.location.search
+        );
+    }
+}
+
+
+async function loadUserWithAccessToken(accessToken) {
+    const response = await fetch(
+        `${SUPABASE_URL}/auth/v1/user`,
+        {
+            headers: apiHeaders(accessToken)
+        }
+    );
+
+    if (!response.ok) {
+        return null;
+    }
+
+    return await response.json();
+}
+
+
+async function beginInviteSetup(hashSession) {
+    const user = await loadUserWithAccessToken(
+        hashSession.access_token
+    );
+
+    if (!user) {
+        clearAuthHash();
+        return false;
+    }
+
+    authSession = {
+        access_token: hashSession.access_token,
+        refresh_token: hashSession.refresh_token,
+        user: user
+    };
+
+    currentUser = user;
+
+    document.getElementById("login-screen").classList.add("hidden");
+    document.getElementById("roller-screen").classList.add("hidden");
+    document.getElementById("config-screen").classList.add("hidden");
+    document.getElementById("setup-screen").classList.remove("hidden");
+
+    return true;
+}
+
+
+async function setInvitedUserPassword() {
+    const password = document
+        .getElementById("setup-password")
+        .value;
+
+    const confirmPassword = document
+        .getElementById("setup-password-confirm")
+        .value;
+
+    const message = document.getElementById("setup-message");
+
+    if (password.length < 6) {
+        message.textContent =
+            "Password must be at least 6 characters.";
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        message.textContent =
+            "The passwords do not match.";
+        return;
+    }
+
+    message.textContent = "Setting password…";
+
+    try {
+        const response = await fetch(
+            `${SUPABASE_URL}/auth/v1/user`,
+            {
+                method: "PUT",
+                headers: apiHeaders(authSession.access_token),
+                body: JSON.stringify({
+                    password: password
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.msg ||
+                data.message ||
+                data.error_description ||
+                "Could not set password."
+            );
+        }
+
+        authSession.user = data;
+        currentUser = data;
+        saveAuthSession(authSession);
+
+        clearAuthHash();
+
+        document.getElementById("setup-password").value = "";
+        document.getElementById("setup-password-confirm").value = "";
+        message.textContent = "";
+
+        document.getElementById("setup-screen").classList.add("hidden");
+
+        await enterAuthenticatedApp();
+
+    } catch (error) {
+        message.textContent = error.message;
+    }
 }
 
 
@@ -1445,6 +1615,22 @@ document
 document
     .getElementById("logout-button")
     .addEventListener("click", signOut);
+
+
+document
+    .getElementById("setup-button")
+    .addEventListener("click", setInvitedUserPassword);
+
+document
+    .getElementById("setup-password-confirm")
+    .addEventListener(
+        "keydown",
+        event => {
+            if (event.key === "Enter") {
+                setInvitedUserPassword();
+            }
+        }
+    );
 
 window.addEventListener(
     "online",

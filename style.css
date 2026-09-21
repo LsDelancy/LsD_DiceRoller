@@ -553,3 +553,11 @@ button:active {
     padding: 0 5px;
   }
 }
+
+.setup-copy {
+  margin: 0 0 16px;
+  color: #b9c2ca;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}

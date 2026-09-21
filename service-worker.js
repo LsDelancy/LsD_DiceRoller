@@ -1,4 +1,4 @@
-const CACHE_NAME = "dice-roller-v2";
+const CACHE_NAME = "dice-roller-v3";
 const APP_FILES = [
   "./",
   "./index.html",

@@ -58,6 +58,43 @@
       </div>
     </section>
 
+    <!-- INVITATION / PASSWORD SETUP SCREEN -->
+    <section id="setup-screen" class="hidden">
+      <h1>Dice Roller</h1>
+
+      <div class="login-card">
+        <h2>Set Your Password</h2>
+
+        <p class="setup-copy">
+          Your invitation was accepted. Choose the password you will use to sign in.
+        </p>
+
+        <label for="setup-password">Password</label>
+        <input
+          id="setup-password"
+          type="password"
+          autocomplete="new-password"
+        >
+
+        <label for="setup-password-confirm">Confirm Password</label>
+        <input
+          id="setup-password-confirm"
+          type="password"
+          autocomplete="new-password"
+        >
+
+        <div id="setup-message" class="login-message"></div>
+
+        <button
+          type="button"
+          id="setup-button"
+          class="login-button"
+        >
+          SET PASSWORD
+        </button>
+      </div>
+    </section>
+
     <!-- MAIN ROLLER SCREEN -->
     <section id="roller-screen" class="hidden">
       <div class="app-header">
