@@ -37,14 +37,27 @@ function rollDie(sides) {
 
 // =========================================================
 // SUPABASE AUTHENTICATION / CLOUD SYNC
+// Official supabase-js client handles session persistence,
+// refresh-token rotation, and automatic token refresh.
 // =========================================================
 
 const SUPABASE_URL = "https://owjypjpqpjwieaadmcij.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_YEIjvyEdP3_6UbKC_gX7eQ_mdb0IUFx";
 
-const AUTH_STORAGE_KEY = "diceRollerAuthSession";
+const LEGACY_AUTH_STORAGE_KEY = "diceRollerAuthSession";
 
-let authSession = null;
+const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY,
+    {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+        }
+    }
+);
+
 let currentUser = null;
 
 
@@ -54,50 +67,6 @@ function panelStorageKey() {
     }
 
     return `diceRollerPanels_${currentUser.id}`;
-}
-
-
-function apiHeaders(accessToken = null) {
-    const headers = {
-        "apikey": SUPABASE_PUBLISHABLE_KEY,
-        "Content-Type": "application/json"
-    };
-
-    if (accessToken) {
-        headers["Authorization"] = `Bearer ${accessToken}`;
-    }
-
-    return headers;
-}
-
-
-function saveAuthSession(session) {
-    authSession = session;
-
-    if (session) {
-        localStorage.setItem(
-            AUTH_STORAGE_KEY,
-            JSON.stringify(session)
-        );
-    } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-}
-
-
-function loadAuthSession() {
-    const saved = localStorage.getItem(AUTH_STORAGE_KEY);
-
-    if (!saved) {
-        return null;
-    }
-
-    try {
-        return JSON.parse(saved);
-    } catch {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-        return null;
-    }
 }
 
 
@@ -133,7 +102,10 @@ function loadPanelsLocally() {
             return true;
         }
     } catch (error) {
-        console.warn("Could not load local panel settings.", error);
+        console.warn(
+            "Could not load local panel settings.",
+            error
+        );
     }
 
     return false;
@@ -141,7 +113,8 @@ function loadPanelsLocally() {
 
 
 function setSyncStatus(text, className = "") {
-    const element = document.getElementById("sync-status");
+    const element =
+        document.getElementById("sync-status");
 
     if (!element) {
         return;
@@ -156,147 +129,160 @@ function setSyncStatus(text, className = "") {
 }
 
 
-async function signInWithPassword(email, password) {
-    const response = await fetch(
-        `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
-        {
-            method: "POST",
-            headers: apiHeaders(),
-            body: JSON.stringify({
-                email,
-                password
-            })
-        }
-    );
+function showLoginScreen(message = "") {
+    document
+        .getElementById("setup-screen")
+        .classList.add("hidden");
 
-    const data = await response.json();
+    document
+        .getElementById("config-screen")
+        .classList.add("hidden");
 
-    if (!response.ok) {
-        throw new Error(
-            data.error_description ||
-            data.msg ||
-            data.message ||
-            "Sign in failed."
-        );
-    }
+    document
+        .getElementById("roller-screen")
+        .classList.add("hidden");
 
-    saveAuthSession(data);
-    currentUser = data.user;
-}
+    document
+        .getElementById("login-screen")
+        .classList.remove("hidden");
 
+    const messageElement =
+        document.getElementById("login-message");
 
-async function refreshAuthSession() {
-    if (
-        !authSession ||
-        !authSession.refresh_token
-    ) {
-        return false;
-    }
-
-    try {
-        const response = await fetch(
-            `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
-            {
-                method: "POST",
-                headers: apiHeaders(),
-                body: JSON.stringify({
-                    refresh_token: authSession.refresh_token
-                })
-            }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            return false;
-        }
-
-        saveAuthSession(data);
-        currentUser = data.user;
-        return true;
-    } catch {
-        return false;
+    if (messageElement) {
+        messageElement.textContent = message;
     }
 }
 
 
-async function verifyCurrentSession() {
-    if (
-        !authSession ||
-        !authSession.access_token
-    ) {
+async function migrateLegacySessionIfPresent() {
+    const legacy =
+        localStorage.getItem(
+            LEGACY_AUTH_STORAGE_KEY
+        );
+
+    if (!legacy) {
         return false;
     }
 
     try {
-        let response = await fetch(
-            `${SUPABASE_URL}/auth/v1/user`,
-            {
-                headers: apiHeaders(authSession.access_token)
-            }
-        );
+        const parsed =
+            JSON.parse(legacy);
 
         if (
-            response.status === 401 &&
-            await refreshAuthSession()
+            !parsed ||
+            !parsed.access_token ||
+            !parsed.refresh_token
         ) {
-            response = await fetch(
-                `${SUPABASE_URL}/auth/v1/user`,
-                {
-                    headers: apiHeaders(authSession.access_token)
-                }
+            localStorage.removeItem(
+                LEGACY_AUTH_STORAGE_KEY
             );
-        }
-
-        if (!response.ok) {
             return false;
         }
 
-        currentUser = await response.json();
+        const {
+            data,
+            error
+        } =
+            await supabaseClient.auth.setSession({
+                access_token:
+                    parsed.access_token,
+                refresh_token:
+                    parsed.refresh_token
+            });
+
+        if (error || !data.session) {
+            return false;
+        }
+
+        localStorage.removeItem(
+            LEGACY_AUTH_STORAGE_KEY
+        );
+
+        currentUser =
+            data.session.user;
+
         return true;
-    } catch {
+
+    } catch (error) {
+        console.warn(
+            "Legacy session migration failed.",
+            error
+        );
+
         return false;
     }
+}
+
+
+async function signInWithPassword(
+    email,
+    password
+) {
+    const {
+        data,
+        error
+    } =
+        await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+        });
+
+    if (error) {
+        throw error;
+    }
+
+    if (!data.session || !data.user) {
+        throw new Error(
+            "Sign in did not return a valid session."
+        );
+    }
+
+    currentUser =
+        data.user;
 }
 
 
 async function signOut() {
-    if (
-        authSession &&
-        authSession.access_token
-    ) {
-        try {
-            await fetch(
-                `${SUPABASE_URL}/auth/v1/logout`,
-                {
-                    method: "POST",
-                    headers: apiHeaders(authSession.access_token)
-                }
-            );
-        } catch {
-            // Local sign-out still proceeds.
-        }
+    const {
+        error
+    } =
+        await supabaseClient.auth.signOut({
+            scope: "local"
+        });
+
+    if (error) {
+        console.warn(
+            "Supabase sign out warning:",
+            error
+        );
     }
 
-    saveAuthSession(null);
     currentUser = null;
 
-    document.getElementById("config-screen").classList.add("hidden");
-    document.getElementById("roller-screen").classList.add("hidden");
-    document.getElementById("login-screen").classList.remove("hidden");
-    document.getElementById("login-password").value = "";
+    document
+        .getElementById("login-password")
+        .value = "";
+
     setSyncStatus("");
+    showLoginScreen();
 }
 
 
 function cloudPayload() {
     return {
-        user_id: currentUser.id,
-        panel1: panels[1],
-        panel2: panels[2],
-        panel3: panels[3],
-        panel4: panels[4],
-        updated_at: new Date().toISOString()
+        user_id:
+            currentUser.id,
+        panel1:
+            panels[1],
+        panel2:
+            panels[2],
+        panel3:
+            panels[3],
+        panel4:
+            panels[4],
+        updated_at:
+            new Date().toISOString()
     };
 }
 
@@ -306,36 +292,44 @@ async function loadPanelsFromCloud() {
         return false;
     }
 
-    const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/user_dice_settings?user_id=eq.${encodeURIComponent(currentUser.id)}&select=panel1,panel2,panel3,panel4`,
-        {
-            headers: {
-                ...apiHeaders(authSession.access_token),
-                "Accept": "application/json"
-            }
-        }
-    );
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("user_dice_settings")
+            .select(
+                "panel1,panel2,panel3,panel4"
+            )
+            .eq(
+                "user_id",
+                currentUser.id
+            )
+            .maybeSingle();
 
-    if (!response.ok) {
-        throw new Error(`Cloud load failed (${response.status}).`);
+    if (error) {
+        throw error;
     }
 
-    const rows = await response.json();
-
-    if (
-        Array.isArray(rows) &&
-        rows.length > 0
-    ) {
-        panels[1] = rows[0].panel1;
-        panels[2] = rows[0].panel2;
-        panels[3] = rows[0].panel3;
-        panels[4] = rows[0].panel4;
-
-        savePanelsLocally();
-        return true;
+    if (!data) {
+        return false;
     }
 
-    return false;
+    panels[1] =
+        data.panel1;
+
+    panels[2] =
+        data.panel2;
+
+    panels[3] =
+        data.panel3;
+
+    panels[4] =
+        data.panel4;
+
+    savePanelsLocally();
+
+    return true;
 }
 
 
@@ -346,159 +340,167 @@ async function savePanelsToCloud() {
         !currentUser ||
         !navigator.onLine
     ) {
-        setSyncStatus("Saved on this device", "warning");
+        setSyncStatus(
+            "Saved on this device",
+            "warning"
+        );
         return;
     }
 
     setSyncStatus("Saving…");
 
-    const validSession = await verifyCurrentSession();
-
-    if (!validSession) {
-        setSyncStatus("Saved on this device", "warning");
-        return;
-    }
-
     try {
-        const response = await fetch(
-            `${SUPABASE_URL}/rest/v1/user_dice_settings?on_conflict=user_id`,
-            {
-                method: "POST",
-                headers: {
-                    ...apiHeaders(authSession.access_token),
-                    "Prefer": "resolution=merge-duplicates,return=minimal"
-                },
-                body: JSON.stringify(cloudPayload())
-            }
-        );
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("user_dice_settings")
+                .upsert(
+                    cloudPayload(),
+                    {
+                        onConflict:
+                            "user_id"
+                    }
+                );
 
-        if (!response.ok) {
-            const body = await response.text();
-
-            throw new Error(
-                `Cloud save failed (${response.status}): ${body}`
-            );
+        if (error) {
+            throw error;
         }
 
-        setSyncStatus("Saved", "saved");
+        setSyncStatus(
+            "Saved",
+            "saved"
+        );
+
     } catch (error) {
-        console.warn(error);
-        setSyncStatus("Saved on this device", "warning");
+        console.warn(
+            "Cloud save failed.",
+            error
+        );
+
+        setSyncStatus(
+            "Saved on this device • cloud unavailable",
+            "warning"
+        );
     }
 }
 
 
 async function enterAuthenticatedApp() {
-    document.getElementById("login-screen").classList.add("hidden");
-    document.getElementById("config-screen").classList.add("hidden");
-    document.getElementById("roller-screen").classList.remove("hidden");
+    document
+        .getElementById("login-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("setup-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("config-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("roller-screen")
+        .classList.remove("hidden");
 
     loadPanelsLocally();
     renderPanels();
 
     if (!navigator.onLine) {
-        setSyncStatus("Offline • using saved panels", "warning");
+        setSyncStatus(
+            "Offline • using saved panels",
+            "warning"
+        );
         return;
     }
 
-    setSyncStatus("Loading saved panels…");
+    setSyncStatus(
+        "Loading saved panels…"
+    );
 
     try {
-        const loaded = await loadPanelsFromCloud();
+        const loaded =
+            await loadPanelsFromCloud();
 
         if (loaded) {
             renderPanels();
-            setSyncStatus("Saved panels loaded", "saved");
+
+            setSyncStatus(
+                "Saved panels loaded",
+                "saved"
+            );
+
         } else {
             await savePanelsToCloud();
         }
+
     } catch (error) {
-        console.warn(error);
-        setSyncStatus("Using saved panels on this device", "warning");
+        console.warn(
+            "Cloud load failed.",
+            error
+        );
+
+        setSyncStatus(
+            "Using saved panels on this device",
+            "warning"
+        );
     }
 }
 
 
 async function handleLogin() {
-    const email = document
-        .getElementById("login-email")
-        .value
-        .trim();
+    const email =
+        document
+            .getElementById(
+                "login-email"
+            )
+            .value
+            .trim();
 
-    const password = document
-        .getElementById("login-password")
-        .value;
+    const password =
+        document
+            .getElementById(
+                "login-password"
+            )
+            .value;
 
-    const message = document.getElementById("login-message");
+    const message =
+        document
+            .getElementById(
+                "login-message"
+            );
 
     if (!email || !password) {
-        message.textContent = "Enter your email and password.";
+        message.textContent =
+            "Enter your email and password.";
         return;
     }
 
-    message.textContent = "Signing in…";
+    message.textContent =
+        "Signing in…";
 
     try {
-        await signInWithPassword(email, password);
+        await signInWithPassword(
+            email,
+            password
+        );
+
         message.textContent = "";
-        document.getElementById("login-password").value = "";
+
+        document
+            .getElementById(
+                "login-password"
+            )
+            .value = "";
+
         await enterAuthenticatedApp();
+
     } catch (error) {
-        message.textContent = error.message;
+        message.textContent =
+            error.message ||
+            "Sign in failed.";
     }
 }
-
-
-async function initializeAuthenticatedApp() {
-    document.getElementById("login-screen").classList.add("hidden");
-    document.getElementById("roller-screen").classList.add("hidden");
-    document.getElementById("config-screen").classList.add("hidden");
-    document.getElementById("setup-screen").classList.add("hidden");
-
-    const hashSession = readAuthHash();
-
-    if (
-        hashSession &&
-        (
-            hashSession.type === "invite" ||
-            hashSession.type === "recovery" ||
-            hashSession.type === "signup"
-        )
-    ) {
-        const started = await beginInviteSetup(hashSession);
-
-        if (started) {
-            return;
-        }
-    }
-
-    authSession = loadAuthSession();
-
-    if (authSession) {
-        currentUser = authSession.user || null;
-
-        if (!navigator.onLine) {
-            loadPanelsLocally();
-            renderPanels();
-            document.getElementById("roller-screen").classList.remove("hidden");
-            setSyncStatus("Offline • using saved panels", "warning");
-            return;
-        }
-
-        const valid = await verifyCurrentSession();
-
-        if (valid) {
-            await enterAuthenticatedApp();
-            return;
-        }
-
-        saveAuthSession(null);
-        currentUser = null;
-    }
-
-    document.getElementById("login-screen").classList.remove("hidden");
-}
-
 
 
 // =========================================================
@@ -506,26 +508,44 @@ async function initializeAuthenticatedApp() {
 // =========================================================
 
 function readAuthHash() {
-    const hash = window.location.hash;
+    const hash =
+        window.location.hash;
 
-    if (!hash || hash.length < 2) {
+    if (
+        !hash ||
+        hash.length < 2
+    ) {
         return null;
     }
 
-    const params = new URLSearchParams(hash.slice(1));
+    const params =
+        new URLSearchParams(
+            hash.slice(1)
+        );
 
-    const accessToken = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
-    const type = params.get("type");
+    const accessToken =
+        params.get("access_token");
 
-    if (!accessToken) {
+    const refreshToken =
+        params.get("refresh_token");
+
+    const type =
+        params.get("type");
+
+    if (
+        !accessToken ||
+        !refreshToken
+    ) {
         return null;
     }
 
     return {
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        type: type
+        access_token:
+            accessToken,
+        refresh_token:
+            refreshToken,
+        type:
+            type
     };
 }
 
@@ -535,65 +555,83 @@ function clearAuthHash() {
         history.replaceState(
             null,
             document.title,
-            window.location.pathname + window.location.search
+            window.location.pathname +
+                window.location.search
         );
     }
 }
 
 
-async function loadUserWithAccessToken(accessToken) {
-    const response = await fetch(
-        `${SUPABASE_URL}/auth/v1/user`,
-        {
-            headers: apiHeaders(accessToken)
-        }
-    );
+async function beginInviteSetup(
+    hashSession
+) {
+    const {
+        data,
+        error
+    } =
+        await supabaseClient.auth.setSession({
+            access_token:
+                hashSession.access_token,
+            refresh_token:
+                hashSession.refresh_token
+        });
 
-    if (!response.ok) {
-        return null;
-    }
+    if (
+        error ||
+        !data.session ||
+        !data.user
+    ) {
+        console.warn(
+            "Invite session could not be established.",
+            error
+        );
 
-    return await response.json();
-}
-
-
-async function beginInviteSetup(hashSession) {
-    const user = await loadUserWithAccessToken(
-        hashSession.access_token
-    );
-
-    if (!user) {
-        clearAuthHash();
         return false;
     }
 
-    authSession = {
-        access_token: hashSession.access_token,
-        refresh_token: hashSession.refresh_token,
-        user: user
-    };
+    currentUser =
+        data.user;
 
-    currentUser = user;
+    document
+        .getElementById("login-screen")
+        .classList.add("hidden");
 
-    document.getElementById("login-screen").classList.add("hidden");
-    document.getElementById("roller-screen").classList.add("hidden");
-    document.getElementById("config-screen").classList.add("hidden");
-    document.getElementById("setup-screen").classList.remove("hidden");
+    document
+        .getElementById("roller-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("config-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("setup-screen")
+        .classList.remove("hidden");
 
     return true;
 }
 
 
 async function setInvitedUserPassword() {
-    const password = document
-        .getElementById("setup-password")
-        .value;
+    const password =
+        document
+            .getElementById(
+                "setup-password"
+            )
+            .value;
 
-    const confirmPassword = document
-        .getElementById("setup-password-confirm")
-        .value;
+    const confirmPassword =
+        document
+            .getElementById(
+                "setup-password-confirm"
+            )
+            .value;
 
-    const message = document.getElementById("setup-message");
+    const message =
+        document
+            .getElementById(
+                "setup-message"
+            );
 
     if (password.length < 6) {
         message.textContent =
@@ -601,55 +639,169 @@ async function setInvitedUserPassword() {
         return;
     }
 
-    if (password !== confirmPassword) {
+    if (
+        password !==
+        confirmPassword
+    ) {
         message.textContent =
             "The passwords do not match.";
         return;
     }
 
-    message.textContent = "Setting password…";
+    message.textContent =
+        "Setting password…";
 
     try {
-        const response = await fetch(
-            `${SUPABASE_URL}/auth/v1/user`,
-            {
-                method: "PUT",
-                headers: apiHeaders(authSession.access_token),
-                body: JSON.stringify({
-                    password: password
-                })
-            }
-        );
+        const {
+            data,
+            error
+        } =
+            await supabaseClient.auth.updateUser({
+                password
+            });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                data.msg ||
-                data.message ||
-                data.error_description ||
-                "Could not set password."
-            );
+        if (error) {
+            throw error;
         }
 
-        authSession.user = data;
-        currentUser = data;
-        saveAuthSession(authSession);
+        currentUser =
+            data.user;
 
         clearAuthHash();
 
-        document.getElementById("setup-password").value = "";
-        document.getElementById("setup-password-confirm").value = "";
+        document
+            .getElementById(
+                "setup-password"
+            )
+            .value = "";
+
+        document
+            .getElementById(
+                "setup-password-confirm"
+            )
+            .value = "";
+
         message.textContent = "";
 
-        document.getElementById("setup-screen").classList.add("hidden");
+        document
+            .getElementById(
+                "setup-screen"
+            )
+            .classList.add("hidden");
 
         await enterAuthenticatedApp();
 
     } catch (error) {
-        message.textContent = error.message;
+        message.textContent =
+            error.message ||
+            "Could not set password.";
     }
 }
+
+
+async function initializeAuthenticatedApp() {
+    document
+        .getElementById("login-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("roller-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("config-screen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("setup-screen")
+        .classList.add("hidden");
+
+    const hashSession =
+        readAuthHash();
+
+    if (
+        hashSession &&
+        (
+            hashSession.type === "invite" ||
+            hashSession.type === "recovery" ||
+            hashSession.type === "signup"
+        )
+    ) {
+        const started =
+            await beginInviteSetup(
+                hashSession
+            );
+
+        if (started) {
+            return;
+        }
+
+        clearAuthHash();
+    }
+
+    let {
+        data: {
+            session
+        },
+        error
+    } =
+        await supabaseClient.auth.getSession();
+
+    if (error) {
+        console.warn(
+            "Could not read stored Supabase session.",
+            error
+        );
+    }
+
+    if (!session) {
+        const migrated =
+            await migrateLegacySessionIfPresent();
+
+        if (migrated) {
+            const result =
+                await supabaseClient.auth.getSession();
+
+            session =
+                result.data.session;
+        }
+    }
+
+    if (session && session.user) {
+        currentUser =
+            session.user;
+
+        await enterAuthenticatedApp();
+        return;
+    }
+
+    currentUser = null;
+    showLoginScreen();
+}
+
+
+// Keep the UI in sync with genuine auth-state changes.
+// Automatic token refreshes are intentionally ignored because
+// they should not interrupt the user.
+supabaseClient.auth.onAuthStateChange(
+    (event, session) => {
+        if (
+            event === "SIGNED_OUT"
+        ) {
+            currentUser = null;
+            showLoginScreen();
+            return;
+        }
+
+        if (
+            session &&
+            session.user
+        ) {
+            currentUser =
+                session.user;
+        }
+    }
+);
 
 
 // =========================================================

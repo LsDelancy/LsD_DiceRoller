@@ -1,4 +1,4 @@
-const CACHE_NAME = "dice-roller-v4";
+const CACHE_NAME = "dice-roller-v6";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -35,6 +35,31 @@ self.addEventListener("fetch", event => {
 
   const url = new URL(event.request.url);
 
+  // Cache the official Supabase browser client after the first
+  // successful online load so the installed PWA can still start
+  // when offline later.
+  if (
+    url.hostname === "cdn.jsdelivr.net" &&
+    url.pathname.includes("/@supabase/supabase-js@2.116.0")
+  ) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async cache => {
+        const cached = await cache.match(event.request);
+
+        try {
+          const response = await fetch(event.request);
+          cache.put(event.request, response.clone());
+          return response;
+        } catch {
+          if (cached) return cached;
+          throw new Error("Supabase client unavailable.");
+        }
+      })
+    );
+
+    return;
+  }
+
   if (url.origin !== self.location.origin) {
     return;
   }
@@ -58,3 +83,4 @@ self.addEventListener("fetch", event => {
       )
   );
 });
+
