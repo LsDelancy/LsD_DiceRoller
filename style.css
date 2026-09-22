@@ -561,3 +561,10 @@ button:active {
   line-height: 1.45;
   text-align: center;
 }
+
+
+.single-line-breakdown {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}

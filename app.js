@@ -1225,24 +1225,28 @@ function displayRememberedRoll(panelNumber) {
     resultElement.textContent =
         memory.total;
 
-    if (config.modifierType === "none") {
-        calculationElement.textContent = "";
-    } else {
+    rollsElement.innerHTML = "";
+
+    // Keep the existing d20 display behavior unchanged.
+    // d20 rolls: show the full individual list when it fits.
+    // If it overflows, collapse to a one-line summary that always
+    // preserves natural-1 and natural-20 information.
+    if (
+        config.sides === 20 &&
+        Array.isArray(memory.rolls)
+    ) {
         const sign =
             config.modifierType === "plus"
                 ? "+"
                 : "−";
 
-        calculationElement.textContent =
-            `(${memory.diceResult} ${sign} ${config.modifierValue})`;
-    }
+        if (config.modifierType === "none") {
+            calculationElement.textContent = "";
+        } else {
+            calculationElement.textContent =
+                `(${memory.diceResult} ${sign} ${config.modifierValue})`;
+        }
 
-    rollsElement.innerHTML = "";
-
-    if (
-        config.sides === 20 &&
-        Array.isArray(memory.rolls)
-    ) {
         const label =
             document.createElement("span");
 
@@ -1281,13 +1285,183 @@ function displayRememberedRoll(panelNumber) {
                 memory.rolls.length - 1
             ) {
                 rollsElement.appendChild(
-                    document.createTextNode(
-                        ", "
-                    )
+                    document.createTextNode(", ")
                 );
             }
         });
+
+        rollsElement.classList.add(
+            "single-line-breakdown"
+        );
+
+        requestAnimationFrame(() => {
+            if (
+                rollsElement.scrollWidth <=
+                rollsElement.clientWidth
+            ) {
+                return;
+            }
+
+            const naturalOnes =
+                memory.rolls.filter(
+                    roll => roll === 1
+                ).length;
+
+            const naturalTwenties =
+                memory.rolls.filter(
+                    roll => roll === 20
+                ).length;
+
+            rollsElement.innerHTML = "";
+
+            const prefix =
+                document.createElement("span");
+
+            prefix.textContent =
+                `${config.dice} ${config.dice === 1 ? "die" : "dice"} : `;
+
+            rollsElement.appendChild(prefix);
+
+            const critParts = [];
+
+            if (naturalOnes > 0) {
+                critParts.push({
+                    value: "1",
+                    count: naturalOnes,
+                    className: "natural-1"
+                });
+            }
+
+            if (naturalTwenties > 0) {
+                critParts.push({
+                    value: "20",
+                    count: naturalTwenties,
+                    className: "natural-20"
+                });
+            }
+
+            if (critParts.length > 0) {
+                rollsElement.appendChild(
+                    document.createTextNode("(")
+                );
+
+                critParts.forEach((part, index) => {
+                    const valueSpan =
+                        document.createElement("span");
+
+                    valueSpan.textContent =
+                        part.value;
+
+                    valueSpan.classList.add(
+                        part.className
+                    );
+
+                    rollsElement.appendChild(
+                        valueSpan
+                    );
+
+                    rollsElement.appendChild(
+                        document.createTextNode(
+                            `x${part.count}`
+                        )
+                    );
+
+                    if (
+                        index <
+                        critParts.length - 1
+                    ) {
+                        rollsElement.appendChild(
+                            document.createTextNode(", ")
+                        );
+                    }
+                });
+
+                rollsElement.appendChild(
+                    document.createTextNode(") ")
+                );
+            }
+
+            let resultText =
+                `${memory.diceResult}`;
+
+            if (
+                config.modifierType !==
+                "none"
+            ) {
+                resultText +=
+                    ` ${sign} ${config.modifierValue}`;
+            }
+
+            if (
+                config.modifierType !==
+                "none"
+            ) {
+                resultText +=
+                    ` = ${memory.total}`;
+            }
+
+            rollsElement.appendChild(
+                document.createTextNode(
+                    resultText
+                )
+            );
+
+            // In collapsed mode, the summary line contains the math,
+            // so hide the separate calculation line to avoid duplication.
+            calculationElement.textContent = "";
+        });
+
+        return;
     }
+
+
+    // Non-d20 rolls: show every die result on one line when it fits.
+    const rollList =
+        Array.isArray(memory.rolls)
+            ? memory.rolls.join(", ")
+            : "";
+
+    let fullBreakdown = rollList;
+    let compactBreakdown =
+        `${config.dice} ${config.dice === 1 ? "die" : "dice"} = ${memory.diceResult}`;
+
+    if (config.modifierType !== "none") {
+        const sign =
+            config.modifierType === "plus"
+                ? "+"
+                : "−";
+
+        fullBreakdown +=
+            ` ${sign} ${config.modifierValue}`;
+
+        compactBreakdown +=
+            ` ${sign} ${config.modifierValue}`;
+    }
+
+    fullBreakdown +=
+        ` = ${memory.total}`;
+
+    compactBreakdown +=
+        ` = ${memory.total}`;
+
+    calculationElement.textContent =
+        fullBreakdown;
+
+    calculationElement.classList.add(
+        "single-line-breakdown"
+    );
+
+    // Let the browser lay out the full version first, then collapse only
+    // when it truly does not fit the available width on this device.
+    requestAnimationFrame(() => {
+        if (
+            calculationElement.scrollWidth >
+            calculationElement.clientWidth
+        ) {
+            calculationElement.textContent =
+                compactBreakdown;
+        }
+    });
 }
 
 
