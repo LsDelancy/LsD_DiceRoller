@@ -1416,33 +1416,24 @@ function displayRememberedRoll(panelNumber) {
 
 
     // Non-d20 rolls: show every die result on one line when it fits.
+    // If the full list does not fit, collapse to a compact summary.
     const rollList =
         Array.isArray(memory.rolls)
             ? memory.rolls.join(", ")
             : "";
 
-    let fullBreakdown = rollList;
-    let compactBreakdown =
-        `${config.dice} ${config.dice === 1 ? "die" : "dice"} = ${memory.diceResult}`;
+    const modifierText =
+        config.modifierType === "none"
+            ? ""
+            : config.modifierType === "plus"
+                ? `\u00A0\u00A0+ ${config.modifierValue}`
+                : `\u00A0\u00A0− ${config.modifierValue}`;
 
-    if (config.modifierType !== "none") {
-        const sign =
-            config.modifierType === "plus"
-                ? "+"
-                : "−";
+    const fullBreakdown =
+        `${rollList}${modifierText}\u00A0\u00A0= ${memory.total}`;
 
-        fullBreakdown +=
-            `\u00A0\u00A0${sign} ${config.modifierValue}`;
-
-        compactBreakdown +=
-            `\u00A0\u00A0${sign} ${config.modifierValue}`;
-    }
-
-    fullBreakdown +=
-        `\u00A0\u00A0= ${memory.total}`;
-
-    compactBreakdown +=
-        `\u00A0\u00A0= ${memory.total}`;
+    const compactBreakdown =
+        `${config.dice} ${config.dice === 1 ? "die" : "dice"} : ${memory.diceResult}${modifierText}\u00A0\u00A0= ${memory.total}`;
 
     calculationElement.textContent =
         fullBreakdown;
@@ -1451,8 +1442,6 @@ function displayRememberedRoll(panelNumber) {
         "single-line-breakdown"
     );
 
-    // Let the browser lay out the full version first, then collapse only
-    // when it truly does not fit the available width on this device.
     requestAnimationFrame(() => {
         if (
             calculationElement.scrollWidth >
@@ -1462,6 +1451,7 @@ function displayRememberedRoll(panelNumber) {
                 compactBreakdown;
         }
     });
+
 }
 
 
