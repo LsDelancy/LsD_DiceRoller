@@ -1182,6 +1182,11 @@ function renderPanels() {
                 class="individual-rolls"
                 id="rolls-${panelNumber}"
             ></div>
+
+            <div
+                class="full-width-breakdown"
+                id="breakdown-${panelNumber}"
+            ></div>
         `;
 
         container.appendChild(panel);
@@ -1215,10 +1220,16 @@ function displayRememberedRoll(panelNumber) {
             `rolls-${panelNumber}`
         );
 
+    const breakdownElement =
+        document.getElementById(
+            `breakdown-${panelNumber}`
+        );
+
     if (!memory) {
         resultElement.textContent = "—";
         calculationElement.textContent = "";
         rollsElement.innerHTML = "";
+        breakdownElement.textContent = "";
         return;
     }
 
@@ -1226,11 +1237,12 @@ function displayRememberedRoll(panelNumber) {
         memory.total;
 
     rollsElement.innerHTML = "";
+    breakdownElement.textContent = "";
+    breakdownElement.classList.remove(
+        "single-line-breakdown"
+    );
 
-    // Keep the existing d20 display behavior unchanged.
-    // d20 rolls: show the full individual list when it fits.
-    // If it overflows, collapse to a one-line summary that always
-    // preserves natural-1 and natural-20 information.
+    // d20 behavior stays in the existing d20 line.
     if (
         config.sides === 20 &&
         Array.isArray(memory.rolls)
@@ -1389,15 +1401,7 @@ function displayRememberedRoll(panelNumber) {
                 "none"
             ) {
                 resultText +=
-                    `\u00A0\u00A0${sign} ${config.modifierValue}`;
-            }
-
-            if (
-                config.modifierType !==
-                "none"
-            ) {
-                resultText +=
-                    `\u00A0\u00A0= ${memory.total}`;
+                    ` ${sign} ${config.modifierValue} = ${memory.total}`;
             }
 
             rollsElement.appendChild(
@@ -1406,17 +1410,16 @@ function displayRememberedRoll(panelNumber) {
                 )
             );
 
-            // In collapsed mode, the summary line contains the math,
-            // so hide the separate calculation line to avoid duplication.
             calculationElement.textContent = "";
         });
 
         return;
     }
 
+    // Non-d20: use the full-width bottom line so the text is not
+    // constrained by the narrow center result column.
+    calculationElement.textContent = "";
 
-    // Non-d20 rolls: show every die result on one line when it fits.
-    // If the full list does not fit, collapse to a compact summary.
     const rollList =
         Array.isArray(memory.rolls)
             ? memory.rolls.join(", ")
@@ -1435,23 +1438,22 @@ function displayRememberedRoll(panelNumber) {
     const compactBreakdown =
         `${config.dice} ${config.dice === 1 ? "die" : "dice"} : ${memory.diceResult}${modifierText}\u00A0\u00A0= ${memory.total}`;
 
-    calculationElement.textContent =
+    breakdownElement.textContent =
         fullBreakdown;
 
-    calculationElement.classList.add(
+    breakdownElement.classList.add(
         "single-line-breakdown"
     );
 
     requestAnimationFrame(() => {
         if (
-            calculationElement.scrollWidth >
-            calculationElement.clientWidth
+            breakdownElement.scrollWidth >
+            breakdownElement.clientWidth
         ) {
-            calculationElement.textContent =
+            breakdownElement.textContent =
                 compactBreakdown;
         }
     });
-
 }
 
 
