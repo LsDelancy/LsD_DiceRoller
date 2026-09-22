@@ -1389,7 +1389,7 @@ function displayRememberedRoll(panelNumber) {
                 "none"
             ) {
                 resultText +=
-                    ` ${sign} ${config.modifierValue}`;
+                    `\u00A0\u00A0${sign} ${config.modifierValue}`;
             }
 
             if (
@@ -1397,7 +1397,7 @@ function displayRememberedRoll(panelNumber) {
                 "none"
             ) {
                 resultText +=
-                    ` = ${memory.total}`;
+                    `\u00A0\u00A0= ${memory.total}`;
             }
 
             rollsElement.appendChild(
@@ -1432,17 +1432,17 @@ function displayRememberedRoll(panelNumber) {
                 : "−";
 
         fullBreakdown +=
-            ` ${sign} ${config.modifierValue}`;
+            `\u00A0\u00A0${sign} ${config.modifierValue}`;
 
         compactBreakdown +=
-            ` ${sign} ${config.modifierValue}`;
+            `\u00A0\u00A0${sign} ${config.modifierValue}`;
     }
 
     fullBreakdown +=
-        ` = ${memory.total}`;
+        `\u00A0\u00A0= ${memory.total}`;
 
     compactBreakdown +=
-        ` = ${memory.total}`;
+        `\u00A0\u00A0= ${memory.total}`;
 
     calculationElement.textContent =
         fullBreakdown;

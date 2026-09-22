@@ -568,3 +568,24 @@ button:active {
   overflow: hidden;
   text-overflow: clip;
 }
+
+
+/* =========================================================
+   RESULT-LINE POLISH
+========================================================= */
+
+.result-area {
+  min-width: 0;
+}
+
+.configure-button,
+.roll-button {
+  transform: translateY(-14px);
+}
+
+.calculation.single-line-breakdown,
+.individual-rolls.single-line-breakdown {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
